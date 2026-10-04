@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llms-txt-gen"
-version = "0.1.0"
+version = "0.1.1"
 description = "Generate llms.txt for any docs site or repository, from a directory of Markdown or HTML or from a sitemap, and check existing files against the convention."
 readme = "README.md"
 requires-python = ">=3.11"
