@@ -206,9 +206,8 @@ Issues and pull requests are welcome; the starter list is in [docs/good-first-is
 
 ## Sibling projects
 
-From the same author, for documentation and agent tooling that has to be reliable:
+More tools by the same author: https://github.com/basitalisandhu
 
-- [masoon](https://github.com/basitalisandhu/masoon): open-source trust infrastructure for AI agents, the front door to the projects below.
 - [agent-threat-model](https://github.com/basitalisandhu/agent-threat-model): describe an agent system in YAML, get a STRIDE and OWASP Agentic threat model.
 - [agent-config-audit](https://github.com/basitalisandhu/agent-config-audit): audit AI agent configuration files for security risks.
 - [mcp-server-template](https://github.com/basitalisandhu/mcp-server-template): secure MCP server template in TypeScript and Python.
