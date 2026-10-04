@@ -47,7 +47,23 @@ Output for the bundled [`examples/docs/`](examples/docs/) (committed as [`exampl
 
 ## Install
 
-Requires Python 3.11 or newer and nothing else. PyPI publication is pending, so install from the repository:
+Container image (linux/amd64 and linux/arm64), published to GitHub Packages on every release. Mount the docs or repository at `/work`; relative paths, including `--out`, resolve from there:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/llms-txt-gen:0.1.0 generate docs --out llms.txt --full
+docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/llms-txt-gen:0.1.0 check llms.txt --strict
+```
+
+The image runs as uid 1000, so the mounted directory must be writable by that user for `generate`. Each image is signed with cosign (keyless) and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
+
+```bash
+cosign verify ghcr.io/basitalisandhu/llms-txt-gen:0.1.0 \
+  --certificate-identity-regexp '^https://github.com/basitalisandhu/llms-txt-gen/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/basitalisandhu/llms-txt-gen:0.1.0 --owner basitalisandhu
+```
+
+Python package: requires Python 3.11 or newer and nothing else. PyPI publication is pending, so install from the repository:
 
 ```bash
 pipx install git+https://github.com/basitalisandhu/llms-txt-gen                      # isolated CLI install
@@ -56,7 +72,13 @@ pip install git+https://github.com/basitalisandhu/llms-txt-gen                  
 git clone https://github.com/basitalisandhu/llms-txt-gen && cd llms-txt-gen && uv sync   # for development
 ```
 
-Once the package is on PyPI the short forms work too: `pipx install llms-txt-gen`, `uvx llms-txt-gen --help`.
+Once published to PyPI:
+
+```bash
+pip install llms-txt-gen
+```
+
+The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-gen --help`.
 
 ## Commands
 
