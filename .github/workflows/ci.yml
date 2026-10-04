@@ -60,3 +60,25 @@ jobs:
           full: "true"
       - name: Show outputs
         run: echo "links=${{ steps.ltg.outputs.links }} sections=${{ steps.ltg.outputs.sections }}"
+
+  container-build:
+    name: Build the container image and run it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image, print --help and generate the example from a mount
+        run: |
+          docker build --build-arg VERSION=ci -t llms-txt-gen:ci .
+          docker run --rm llms-txt-gen:ci --help > help.txt && grep "^usage: llms-txt-gen" help.txt
+          docker run --rm llms-txt-gen:ci --version
+          test "$(docker run --rm --entrypoint id llms-txt-gen:ci -u)" = "1000"
+          mkdir -m 777 out
+          docker run --rm -v "$PWD/examples:/work:ro" -v "$PWD/out:/out" llms-txt-gen:ci generate docs --out /out/llms.txt --full --base-url https://acme.example.com/docs --strip-ext --optional 'changelog*'
+          diff out/llms.txt examples/llms.txt
+          diff out/llms-full.txt examples/llms-full.txt
+          docker run --rm -v "$PWD/examples:/work:ro" llms-txt-gen:ci check llms.txt --strict
+          set +e
+          docker run --rm -v "$PWD:/work:ro" llms-txt-gen:ci check README.md > /dev/null
+          test $? -eq 1
