@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: llms-txt-check
+        name: llms-txt-check (example)
+        entry: python -m llms_txt_gen.cli check --strict
+        language: python
+        files: ^examples/llms\.txt$

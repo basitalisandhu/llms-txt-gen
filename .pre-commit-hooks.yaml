@@ -1,0 +1,14 @@
+# Use in another repository:
+#
+#   repos:
+#     - repo: https://github.com/basitalisandhu/llms-txt-gen
+#       rev: v0.1.0
+#       hooks:
+#         - id: llms-txt-check
+- id: llms-txt-check
+  name: llms-txt-check
+  description: Validate llms.txt against the llmstxt.org convention (llms-full.txt is not checked; it inlines page content).
+  entry: llms-txt-gen check --strict
+  language: python
+  files: ^(.*/)?llms\.txt$
+  pass_filenames: true

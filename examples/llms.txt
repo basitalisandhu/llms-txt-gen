@@ -1,0 +1,17 @@
+# Acme Widgets
+
+> Acme Widgets is a small HTTP service for creating and shipping widgets. These pages are the example input for llms-txt-gen; run llms-txt-gen generate examples/docs --stdout to see the output.
+
+## Guides
+
+- [Authentication](https://acme.example.com/docs/guides/authentication): Every request carries a short-lived token in the Authorization header. Tokens expire after one hour and can be rotated at any time.
+- [Quickstart](https://acme.example.com/docs/guides/quickstart): Create your first widget in five minutes.
+
+## Reference
+
+- [HTTP API](https://acme.example.com/docs/reference/api): Every endpoint, with request and response examples.
+- [Command line](https://acme.example.com/docs/reference/cli): Flags and subcommands of the acme command.
+
+## Optional
+
+- [Changelog](https://acme.example.com/docs/changelog): All notable changes to Acme Widgets, newest first.

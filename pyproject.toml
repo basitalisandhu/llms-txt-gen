@@ -1,0 +1,87 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llms-txt-gen"
+version = "0.1.0"
+description = "Generate llms.txt for any docs site or repository, from a directory of Markdown or HTML or from a sitemap, and check existing files against the convention."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Muhammad Basit Ali" }]
+keywords = [
+  "llms-txt",
+  "llms.txt",
+  "documentation",
+  "docs",
+  "sitemap",
+  "markdown",
+  "ai-readiness",
+  "llm",
+  "seo",
+  "cli",
+  "github-action",
+  "static-site",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Documentation",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Text Processing :: Markup :: Markdown",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+llms-txt-gen = "llms_txt_gen.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/basitalisandhu/llms-txt-gen"
+Repository = "https://github.com/basitalisandhu/llms-txt-gen"
+Issues = "https://github.com/basitalisandhu/llms-txt-gen/issues"
+Changelog = "https://github.com/basitalisandhu/llms-txt-gen/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["llms_txt_gen"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "llms_txt_gen/**",
+  "tests/**",
+  "examples/**",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "pyproject.toml",
+]
+
+[tool.uv]
+dev-dependencies = ["pytest>=8.0", "ruff>=0.5", "build>=1.2"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

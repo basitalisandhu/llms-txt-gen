@@ -1,0 +1,123 @@
+name: llms-txt-gen
+description: Generate llms.txt (and llms-full.txt) for a docs directory or a sitemap URL, and validate the result.
+author: Muhammad Basit Ali
+branding:
+  icon: file-text
+  color: blue
+
+inputs:
+  source:
+    description: Directory of Markdown or HTML files, or a sitemap URL.
+    required: false
+    default: docs
+  out:
+    description: Where to write llms.txt.
+    required: false
+    default: llms.txt
+  full:
+    description: Also write llms-full.txt next to the output file.
+    required: false
+    default: "false"
+  base-url:
+    description: Prefix for links when the source is a directory.
+    required: false
+    default: ""
+  strip-ext:
+    description: Drop .md and .html from generated links.
+    required: false
+    default: "false"
+  optional:
+    description: Space-separated globs of URLs or section names to place under "Optional".
+    required: false
+    default: ""
+  max-pages:
+    description: Page cap when reading a sitemap.
+    required: false
+    default: "200"
+  timeout:
+    description: Per-request timeout in seconds for sitemap and page fetches.
+    required: false
+    default: "10"
+  check:
+    description: Run "check --strict" on the generated file and fail the step if it is invalid.
+    required: false
+    default: "true"
+  python-version:
+    description: Python version to set up.
+    required: false
+    default: "3.12"
+  version:
+    description: llms-txt-gen version to install from PyPI. Empty installs the action's own checkout.
+    required: false
+    default: ""
+
+outputs:
+  out:
+    description: Path of the llms.txt that was written.
+    value: ${{ steps.generate.outputs.out }}
+  links:
+    description: Number of links in the generated file.
+    value: ${{ steps.generate.outputs.links }}
+  sections:
+    description: Number of sections in the generated file.
+    value: ${{ steps.generate.outputs.sections }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install llms-txt-gen
+      shell: bash
+      env:
+        LTG_VERSION: ${{ inputs.version }}
+        LTG_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        python -m pip install --upgrade pip >/dev/null
+        if [ -n "$LTG_VERSION" ]; then
+          python -m pip install "llms-txt-gen==$LTG_VERSION"
+        else
+          python -m pip install "$LTG_ACTION_PATH"
+        fi
+        llms-txt-gen --version
+
+    - name: Generate
+      id: generate
+      shell: bash
+      env:
+        SOURCE: ${{ inputs.source }}
+        OUT: ${{ inputs.out }}
+        FULL: ${{ inputs.full }}
+        BASE_URL: ${{ inputs.base-url }}
+        STRIP_EXT: ${{ inputs.strip-ext }}
+        OPTIONAL: ${{ inputs.optional }}
+        MAX_PAGES: ${{ inputs.max-pages }}
+        TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        args=(generate "$SOURCE" --out "$OUT" --max-pages "$MAX_PAGES" --timeout "$TIMEOUT")
+        [ "$FULL" = "true" ] && args+=(--full)
+        [ -n "$BASE_URL" ] && args+=(--base-url "$BASE_URL")
+        [ "$STRIP_EXT" = "true" ] && args+=(--strip-ext)
+        for pat in $OPTIONAL; do args+=(--optional "$pat"); done
+        llms-txt-gen "${args[@]}"
+        summary=$(llms-txt-gen check "$OUT" --format json || true)
+        links=$(printf '%s' "$summary" | python -c "import json,sys; print(json.load(sys.stdin)['links'])")
+        sections=$(printf '%s' "$summary" | python -c "import json,sys; print(len(json.load(sys.stdin)['sections']))")
+        echo "out=$OUT" >> "$GITHUB_OUTPUT"
+        echo "links=$links" >> "$GITHUB_OUTPUT"
+        echo "sections=$sections" >> "$GITHUB_OUTPUT"
+        {
+          echo "### llms-txt-gen"
+          echo
+          echo "Wrote \`$OUT\`: $links links in $sections sections."
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Check
+      if: ${{ inputs.check == 'true' }}
+      shell: bash
+      env:
+        OUT: ${{ inputs.out }}
+      run: llms-txt-gen check "$OUT" --strict
