@@ -102,6 +102,10 @@ The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-
 
 ### How the content is chosen
 
+For local Markdown pages, front matter `llms: false` excludes the page from both
+outputs, including a root README or index. Front matter `llms-section: Name`
+overrides the folder-derived section; an empty value keeps the default section.
+
 - **Title**: front matter `title:`, else the first `# Heading` (or Setext underline heading), else the HTML `<h1>`, else `<title>` with a trailing ` | Site` or ` - Site` removed, else the file name humanised.
 - **Note after the link**: front matter `description:`, else the first prose paragraph after the title (code blocks, lists, quotes and tables are skipped), else the HTML `<meta name="description">`, else the first `<p>`. Truncated to 200 characters at a sentence or word boundary.
 - **Section**: the first path segment, humanised (`getting-started/` becomes `## Getting started`). Files at the root go under `## Docs`, which is rendered first. A folder's `index.md` is listed first in its section. The root `README.md` or `index.md` supplies the document title and summary and is not listed.

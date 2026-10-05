@@ -14,6 +14,7 @@ from .extract import (
     markdown_summary,
     markdown_text,
     markdown_title,
+    parse_frontmatter,
 )
 from .model import Page
 
@@ -102,14 +103,17 @@ def read_page(path: Path, rel: str, url: str) -> Page | None:
     except OSError:
         return None
     fallback = humanise(path.stem)
+    section = section_for(rel)
     if path.suffix.lower() in HTML_SUFFIXES:
         title, summary, content = html_title(text, fallback), html_summary(text), html_text(text)
     else:
+        meta, _ = parse_frontmatter(text)
+        if meta.get("llms", "").lower() == "false":
+            return None
+        section = meta.get("llms-section") or section
         title = markdown_title(text, fallback)
         summary, content = markdown_summary(text), markdown_text(text)
-    return Page(
-        title=title, url=url, summary=summary, section=section_for(rel), content=content, rel=rel
-    )
+    return Page(title=title, url=url, summary=summary, section=section, content=content, rel=rel)
 
 
 def scan_directory(
