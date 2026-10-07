@@ -6,9 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-- Honour local Markdown `llms: false` exclusions and `llms-section` overrides.
+### Added
 
-Nothing yet.
+- Honour local Markdown `llms: false` exclusions and `llms-section` overrides.
 
 ## [0.1.1] - 2026-10-06
 
