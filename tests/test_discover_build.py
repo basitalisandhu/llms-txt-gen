@@ -21,6 +21,28 @@ def test_scan_directory_finds_pages_and_index(docs_dir: Path):
     assert not any(u.endswith(".txt") for u in urls)
 
 
+def test_frontmatter_excludes_pages_and_index_from_both_outputs(tmp_path):
+    write(tmp_path, "README.md", "---\nllms: false\n---\n# Private title\n\nprivate root\n")
+    write(tmp_path, "draft.mdx", "---\nllms: false\n---\n# Private draft\n\nprivate draft\n")
+    write(tmp_path, "visible.md", "---\nllms: true\n---\n# Visible\n\nPublic content\n")
+    pages, index = scan_directory(tmp_path)
+    assert index is None
+    assert [page.rel for page in pages] == ["visible.md"]
+    doc = build_document(pages, "Public")
+    assert "private" not in render_llms_txt(doc).lower()
+    assert "private" not in render_llms_full(doc).lower()
+
+
+def test_frontmatter_section_overrides_folder_but_empty_uses_default(tmp_path):
+    write(tmp_path, "guides/custom.md", '---\nllms-section: "Reference"\n---\n# Custom\n')
+    write(tmp_path, "guides/default.markdown", "---\nllms-section:\n---\n# Default\n")
+    pages, _ = scan_directory(tmp_path)
+    assert {page.rel: page.section for page in pages} == {
+        "guides/custom.md": "Reference",
+        "guides/default.markdown": "Guides",
+    }
+
+
 def test_scan_directory_sections_and_titles(docs_dir: Path):
     pages, _ = scan_directory(docs_dir)
     by_url = {p.url: p for p in pages}
