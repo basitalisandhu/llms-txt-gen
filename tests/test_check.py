@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from llms_txt_gen.check import check_file, check_text, format_text
+from llms_txt_gen.check import check_file, check_links_live, check_text, format_text
+from llms_txt_gen.sitemap import FetchError
 
 from .conftest import EXAMPLES, write
 
@@ -104,3 +105,61 @@ def test_format_text_lists_findings():
 def test_bundled_example_is_valid():
     r = check_file(EXAMPLES / "llms.txt")
     assert r.ok(strict=True), r.findings
+
+
+LIVE = """# Live
+
+> A file whose links are requested.
+
+## Docs
+
+- [Up](https://up.example/): fine
+- [Gone](https://gone.example/page): 404
+- [Down](https://down.example/): no route
+- [Up again](https://up.example/): duplicate
+- [Local](guide.md): relative, never requested
+- [Mail](mailto:a@example.com): not http
+"""
+
+
+def _prober(statuses: dict[str, int]):
+    calls: list[tuple[str, float]] = []
+
+    def probe(url: str, timeout: float) -> int:
+        calls.append((url, timeout))
+        if url not in statuses:
+            raise FetchError(f"{url}: connection refused")
+        return statuses[url]
+
+    probe.calls = calls  # type: ignore[attr-defined]
+    return probe
+
+
+def test_check_links_live_reports_e007_once_per_url():
+    result = check_text(LIVE)
+    assert result.ok()
+    prober = _prober({"https://up.example/": 200, "https://gone.example/page": 404})
+    assert check_links_live(result, prober, timeout=3.0) == 3
+    assert prober.calls == [
+        ("https://up.example/", 3.0),
+        ("https://gone.example/page", 3.0),
+        ("https://down.example/", 3.0),
+    ]
+    e007 = [(f.line, f.message) for f in result.findings if f.code == "E007"]
+    assert e007 == [
+        (8, "link returned HTTP 404: https://gone.example/page"),
+        (9, "link unreachable: https://down.example/: connection refused"),
+    ]
+    assert not result.ok()
+
+
+def test_check_links_live_caps_requests_and_reports_the_rest():
+    result = check_text(LIVE)
+    prober = _prober({"https://up.example/": 200})
+    assert check_links_live(result, prober, timeout=1.0, max_links=1) == 1
+    assert [c[0] for c in prober.calls] == ["https://up.example/"]
+    assert result.ok()
+    info = [f.message for f in result.findings if f.code == "I002"]
+    assert info == ["2 link(s) not fetched; raise --max-links to check them"]
+    none = check_text(LIVE)
+    assert check_links_live(none, _prober({}), timeout=1.0, max_links=0) == 0

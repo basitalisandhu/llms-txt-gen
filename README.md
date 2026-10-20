@@ -6,6 +6,8 @@ Generate llms.txt for any docs site or repository: point `llms-txt-gen` at a dir
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
+**Who it is for:** maintainers of documentation sites and open-source repositories who want their docs to be read well by AI assistants and coding agents, and who want the file rebuilt in CI rather than kept by hand. Project site: https://basitalisandhu.github.io/llms-txt-gen/.
+
 ## Why llms.txt
 
 Language models and the tools built on them read documentation the same way a hurried person does: they land on a page, skim, and give up when the navigation, cookie banners and scripts crowd out the text. `llms.txt` is a plain Markdown file at the root of a site (`/llms.txt`) that says, in a few hundred words, what the project is and which pages matter, with one line per page: a name, a link and a short note. A model that reads it first spends its limited context on the right pages. `llms-full.txt` goes one step further and inlines the content of those pages so a tool can load the whole documentation set in one request. Keeping either file by hand drifts out of date within weeks; this tool regenerates them from the source files or the live sitemap on every build.
@@ -21,9 +23,10 @@ llms-txt-gen check llms.txt
 llms-txt-gen serve-snippet
 ```
 
-Output for the bundled [`examples/docs/`](examples/docs/) (committed as [`examples/llms.txt`](examples/llms.txt)):
+Output for the bundled [`examples/docs/`](examples/docs/) (committed as [`examples/llms.txt`](examples/llms.txt)), from a clone of this repository:
 
 ```text
+$ llms-txt-gen generate examples/docs --stdout --base-url https://acme.example.com/docs --strip-ext --optional 'changelog*'
 # Acme Widgets
 
 > Acme Widgets is a small HTTP service for creating and shipping widgets. These pages are the example input for llms-txt-gen; run llms-txt-gen generate examples/docs --stdout to see the output.
@@ -43,7 +46,7 @@ Output for the bundled [`examples/docs/`](examples/docs/) (committed as [`exampl
 - [Changelog](https://acme.example.com/docs/changelog): All notable changes to Acme Widgets, newest first.
 ```
 
-`llms-txt-gen check examples/llms.txt` then reports `ok` and one info line: `3 section(s), 5 link(s)`.
+Without `--base-url` the links stay relative (`guides/quickstart.md`), and without `--optional` the changelog is listed under `## Docs`. `llms-txt-gen check examples/llms.txt` then reports `ok` and one info line: `3 section(s), 5 link(s)`.
 
 ## Install
 
@@ -85,7 +88,7 @@ The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-
 | Command | What it does |
 |---|---|
 | `llms-txt-gen generate SOURCE --out llms.txt` | Build `llms.txt` from a directory of `.md`, `.mdx`, `.markdown`, `.html` or `.htm` files, or from a sitemap URL (`sitemap.xml` or a sitemap index). `--full` also writes `llms-full.txt`; `--stdout` prints instead of writing. |
-| `llms-txt-gen check FILE-OR-URL` | Validate against the convention: H1 title first, optional blockquote summary, H2 sections of `- [name](url): notes` lines, no deeper headings, `Optional` last, no duplicate links, and for local files no broken relative links. `--format json`, `--strict` (warnings fail). Exit 1 on errors, 2 on usage errors. |
+| `llms-txt-gen check FILE-OR-URL` | Validate against the convention: H1 title first, optional blockquote summary, H2 sections of `- [name](url): notes` lines, no deeper headings, `Optional` last, no duplicate links, and for local files no broken relative links. `--format json`, `--strict` (warnings fail), `--fetch` (request every `http(s)` link, see below). Exit 1 on errors, 2 on usage errors. |
 | `llms-txt-gen serve-snippet` | Print `<link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt">` for the site `<head>`. `--full` adds the `llms-full.txt` tag, `--header` prints HTTP `Link:` headers instead, `--href` sets the location. |
 
 ### generate options
@@ -112,9 +115,20 @@ overrides the folder-derived section; an empty value keeps the default section.
 - **Order**: sections alphabetical (`Docs` first, `Optional` last), pages in file order. Two runs over the same input give byte-identical output.
 - **`llms-full.txt`**: the title and summary, then every page as `# Title`, `Source: url` and its content (Markdown verbatim without front matter, HTML reduced to text with navigation, scripts and styles removed).
 
+### Link liveness: `check --fetch`
+
+A hand-kept `llms.txt` goes stale when pages move. `check --fetch` requests each distinct `http` or `https` link once: `HEAD` first, then `GET` if `HEAD` gets a status of 400 or above (some servers refuse `HEAD`). The body is never read. A final status of 400 or above, a network error, more than 5 redirects or a redirect to a non-HTTP URL is reported as `E007` on the link's line. `--max-links N` (default 100) caps the requests; links beyond the cap are counted in an `I002` line. `--timeout` applies to each request. Relative links are not requested; for a local file they are checked on disk as before (`E006`).
+
+```text
+$ llms-txt-gen check llms.txt --fetch
+llms.txt: problems found
+  info    I001 llms.txt: 1 section(s), 2 link(s)
+  error   E007 llms.txt:8: link returned HTTP 404: https://llmstxt.org/no-such-page
+```
+
 ### Network use
 
-`generate` with a URL fetches the sitemap and each page it lists; `check` with a URL fetches that file. Nothing else touches the network. Only `http` and `https` URLs are accepted, every request has a timeout, bodies are capped at 5 MB, the page count is capped by `--max-pages`, and the User-Agent identifies the tool. Pages that fail to fetch are skipped with a message on stderr and do not fail the run.
+`generate` with a URL fetches the sitemap and each page it lists; `check` with a URL fetches that file, and `check --fetch` requests the links in it. Nothing else touches the network. Only `http` and `https` URLs are accepted, every request has a timeout, bodies are capped at 5 MB (also after gzip decompression), the page count is capped by `--max-pages`, and the User-Agent identifies the tool. Pages that fail to fetch are skipped with a message on stderr and do not fail the run.
 
 ## Checks
 
@@ -125,7 +139,8 @@ overrides the folder-derived section; an empty value keeps the default section.
 | E003 | error | A heading deeper than H2. The convention allows only the H1 title and H2 section names. |
 | E004 | error | More than one H1. |
 | E005 | error | A list item in a section that is not `- [name](url)` or `- [name](url): notes`. |
-| E006 | error | A relative link that does not resolve next to the file (local files only; URLs are not fetched). |
+| E006 | error | A relative link that does not resolve next to the file (local files only). |
+| E007 | error | With `--fetch`: an `http(s)` link returned 400 or above, could not be reached, or redirected more than 5 times or to a non-HTTP URL. |
 | W001 | warning | No blockquote summary after the title. |
 | W002 | warning | No H2 sections. |
 | W003 | warning | A section with no links. |
@@ -135,6 +150,7 @@ overrides the folder-derived section; an empty value keeps the default section.
 | W008 | warning | The summary is shorter than ten characters. |
 | W009 | warning | Prose inside a section; sections should contain only link lines. |
 | I001 | info | Section and link counts. |
+| I002 | info | With `--fetch`: how many links were not requested because of `--max-links`. |
 
 ## CI usage
 
@@ -200,9 +216,7 @@ Serve it at `/llms.txt`, and add the tag from `serve-snippet` to the site `<head
 ## Roadmap
 
 - `--from-nav` mode that reads MkDocs, Docusaurus and Sphinx navigation files for section names and order.
-- Front matter `llms: false` and `llms-section:` keys to exclude or re-home a page.
 - A `diff` command that shows which links were added or removed since the committed file.
-- Optional link liveness check (`check --fetch`) with the same timeout and cap rules as `generate`.
 
 ## Contributing
 

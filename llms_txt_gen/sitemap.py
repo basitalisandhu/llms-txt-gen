@@ -27,9 +27,11 @@ DEFAULT_TIMEOUT = 10.0
 DEFAULT_MAX_PAGES = 200
 MAX_SITEMAPS = 50
 MAX_BYTES = 5 * 1024 * 1024
+MAX_REDIRECTS = 5
 USER_AGENT = f"llms-txt-gen/{__version__} (+https://github.com/basitalisandhu/llms-txt-gen)"
 
 Fetcher = Callable[[str, float], tuple[bytes, str]]
+Prober = Callable[[str, float], int]
 
 
 class FetchError(Exception):
@@ -182,6 +184,44 @@ def pages_from_sitemap(
         page.order = order
         pages.append(page)
     return pages
+
+
+class _HttpOnlyRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow at most MAX_REDIRECTS redirects, and only to http or https URLs."""
+
+    max_redirections = MAX_REDIRECTS
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urlsplit(newurl).scheme.lower() not in {"http", "https"}:
+            raise FetchError(f"{req.full_url}: redirect to unsupported URL {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def probe(url: str, timeout: float = DEFAULT_TIMEOUT) -> int:
+    """Return the final HTTP status of `url` without reading the body.
+
+    Sends HEAD first and falls back to GET when HEAD gets a status of 400 or
+    above, since some servers refuse or mishandle HEAD. Follows at most
+    MAX_REDIRECTS redirects. Network errors and redirect loops raise FetchError.
+    """
+    if urlsplit(url).scheme.lower() not in {"http", "https"}:
+        raise FetchError(f"unsupported URL scheme: {url}")
+    opener = urllib.request.build_opener(_HttpOnlyRedirects)
+    status = 0
+    for method in ("HEAD", "GET"):
+        req = urllib.request.Request(
+            url, method=method, headers={"User-Agent": USER_AGENT, "Accept": "*/*"}
+        )
+        try:
+            with opener.open(req, timeout=timeout) as resp:
+                return resp.status
+        except urllib.error.HTTPError as exc:
+            if exc.code < 400:  # a redirect urllib gave up on
+                raise FetchError(f"{url}: more than {MAX_REDIRECTS} redirects") from None
+            status = exc.code
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+            raise FetchError(f"{url}: {exc}") from exc
+    return status
 
 
 def is_url(value: str) -> bool:
