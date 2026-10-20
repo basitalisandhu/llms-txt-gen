@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import gzip
 import re
 import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from collections.abc import Callable
 from urllib.parse import urlsplit
 
@@ -51,11 +51,27 @@ def fetch(url: str, timeout: float = DEFAULT_TIMEOUT) -> tuple[bytes, str]:
     if len(body) > MAX_BYTES:
         raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
     if url.endswith(".gz") or body[:2] == b"\x1f\x8b":
-        try:
-            body = gzip.decompress(body)
-        except OSError as exc:
-            raise FetchError(f"{url}: bad gzip data") from exc
+        body = gunzip_capped(body, url)
     return body, content_type
+
+
+def gunzip_capped(data: bytes, url: str, limit: int = MAX_BYTES) -> bytes:
+    """Decompress gzip data, refusing output over `limit` bytes and reporting bad data.
+
+    The size cap on the download alone is not enough: a few megabytes of gzip can
+    expand to gigabytes. Truncated or corrupt data raises FetchError instead of the
+    EOFError or zlib.error the standard library would raise.
+    """
+    inflater = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+    try:
+        out = inflater.decompress(data, limit + 1)
+    except zlib.error as exc:
+        raise FetchError(f"{url}: bad gzip data ({exc})") from exc
+    if len(out) > limit:
+        raise FetchError(f"{url}: decompressed response larger than {limit} bytes")
+    if not inflater.eof:
+        raise FetchError(f"{url}: bad gzip data (truncated)")
+    return out
 
 
 def _local(tag: str) -> str:

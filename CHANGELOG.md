@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `generate` from a gzipped sitemap no longer stops with a Python traceback when the gzip data is truncated or corrupt; it reports `bad gzip data` like any other fetch error. The 5 MB response cap now also applies after decompression, so a small compressed sitemap cannot expand without limit in memory.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
