@@ -8,6 +8,8 @@ stay deterministic.
 
 ## 1. Honour `llms: false` in front matter
 
+**Status.** Done in 0.2.0 (#15).
+
 **Context.** Some pages (drafts, redirects, internal notes) should never be listed. Today the only
 way to skip them is `--exclude`.
 
@@ -30,6 +32,8 @@ human-chosen section names and page order instead of folder names and file order
 - Tests with a two-level nav fixture; README option table gains a row.
 
 ## 3. Add `check --fetch` for link liveness
+
+**Status.** Done in 0.3.0 (#10, #20).
 
 **Context.** `check` verifies relative links on disk but never fetches URLs. An optional liveness
 check helps when the file is kept by hand.

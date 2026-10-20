@@ -53,17 +53,17 @@ Without `--base-url` the links stay relative (`guides/quickstart.md`), and witho
 Container image (linux/amd64 and linux/arm64), published to GitHub Packages on every release. Mount the docs or repository at `/work`; relative paths, including `--out`, resolve from there:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/llms-txt-gen:0.2.0 generate docs --out llms.txt --full
-docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/llms-txt-gen:0.2.0 check llms.txt --strict
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 generate docs --out llms.txt --full
+docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 check llms.txt --strict
 ```
 
 The image runs as uid 1000, so the mounted directory must be writable by that user for `generate`. Each image is signed with cosign (keyless) and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
 
 ```bash
-cosign verify ghcr.io/basitalisandhu/llms-txt-gen:0.2.0 \
+cosign verify ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 \
   --certificate-identity-regexp '^https://github.com/basitalisandhu/llms-txt-gen/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/basitalisandhu/llms-txt-gen:0.2.0 --owner basitalisandhu
+gh attestation verify oci://ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 --owner basitalisandhu
 ```
 
 Python package: requires Python 3.11 or newer and nothing else. PyPI publication is pending, so install from the repository:
@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: basitalisandhu/llms-txt-gen@v0.2.0      # pin a release tag
+      - uses: basitalisandhu/llms-txt-gen@v0.3.0      # pin a release tag
         with:
           source: docs
           out: llms.txt
@@ -194,7 +194,7 @@ Validate `llms.txt` before every commit:
 ```yaml
 repos:
   - repo: https://github.com/basitalisandhu/llms-txt-gen
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: llms-txt-check
 ```

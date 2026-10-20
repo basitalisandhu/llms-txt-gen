@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - `check --fetch`: request every distinct `http(s)` link (`HEAD`, then `GET` when `HEAD` gets 400 or above, body never read, at most 5 redirects and only to HTTP URLs) and report `E007` for a status of 400 or above or a network error. `--max-links` (default 100) caps the requests and `I002` counts the rest. (#10)
@@ -45,7 +47,8 @@ All notable changes to this project are documented here. The format follows
 - Renamed the umbrella project from Hisar to Masoon; links, names and identifiers updated.
 - PyPI publishing (release.yml) is off until the repository variable `PYPI_PUBLISH` is set to `true`.
 
-[Unreleased]: https://github.com/basitalisandhu/llms-txt-gen/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/llms-txt-gen/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/basitalisandhu/llms-txt-gen/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/llms-txt-gen/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/basitalisandhu/llms-txt-gen/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/basitalisandhu/llms-txt-gen/releases/tag/v0.1.0
