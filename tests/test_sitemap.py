@@ -14,6 +14,7 @@ from llms_txt_gen.sitemap import (
     page_from_response,
     pages_from_sitemap,
     parse_sitemap,
+    probe,
 )
 
 URLSET = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -193,3 +194,68 @@ def test_fetch_rejects_an_oversized_body(monkeypatch):
     _serve(monkeypatch, b"x" * 11)
     with pytest.raises(FetchError, match="larger than 10 bytes"):
         fetch("https://docs.example.com/sitemap.xml")
+
+
+@pytest.fixture
+def local_site():
+    """A loopback HTTP server with a few behaviours probe() has to handle."""
+    import http.server
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _route(self, head: bool) -> None:
+            path = self.path
+            if path == "/ok":
+                code, headers = 200, {}
+            elif path == "/no-head" and head:
+                code, headers = 405, {}
+            elif path == "/no-head":
+                code, headers = 200, {}
+            elif path == "/gone":
+                code, headers = 404, {}
+            elif path.startswith("/hop/"):
+                n = int(path.rsplit("/", 1)[1])
+                code, headers = 302, {"Location": f"/hop/{n + 1}" if n < 20 else "/ok"}
+            elif path == "/to-ftp":
+                code, headers = 302, {"Location": "ftp://example.com/x"}
+            else:
+                code, headers = 500, {}
+            self.send_response(code)
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def do_HEAD(self):
+            self._route(head=True)
+
+        def do_GET(self):
+            self._route(head=False)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_probe_statuses_head_fallback_and_redirects(local_site):
+    assert probe(local_site + "/ok", 5) == 200
+    assert probe(local_site + "/no-head", 5) == 200
+    assert probe(local_site + "/gone", 5) == 404
+    assert probe(local_site + "/hop/17", 5) == 200  # 4 redirects, then /ok
+    with pytest.raises(FetchError, match="more than 5 redirects"):
+        probe(local_site + "/hop/0", 5)
+    with pytest.raises(FetchError, match="unsupported URL"):
+        probe(local_site + "/to-ftp", 5)
+
+
+def test_probe_rejects_other_schemes_and_reports_refused_connections():
+    with pytest.raises(FetchError, match="unsupported URL scheme"):
+        probe("file:///etc/hosts")
+    with pytest.raises(FetchError):
+        probe("http://127.0.0.1:1/", 2)

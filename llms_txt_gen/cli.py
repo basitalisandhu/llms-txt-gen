@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .build import build_document, render_llms_full, render_llms_txt
-from .check import check_file, check_text, format_text
+from .check import DEFAULT_MAX_LINKS, check_file, check_links_live, check_text, format_text
 from .discover import scan_directory
 from .extract import humanise
 from .sitemap import (
@@ -19,6 +19,7 @@ from .sitemap import (
     fetch,
     is_url,
     pages_from_sitemap,
+    probe,
 )
 from .snippet import snippet
 
@@ -89,7 +90,23 @@ def build_parser() -> argparse.ArgumentParser:
     chk.add_argument("target", help="path to llms.txt, or an http(s) URL")
     chk.add_argument("--format", choices=["text", "json"], default="text")
     chk.add_argument("--strict", action="store_true", help="treat warnings as errors")
-    chk.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    chk.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT,
+        help=f"per-request timeout in seconds (default {DEFAULT_TIMEOUT:g})",
+    )
+    chk.add_argument(
+        "--fetch",
+        action="store_true",
+        help="also request every http(s) link (HEAD, then GET) and report E007 for failures",
+    )
+    chk.add_argument(
+        "--max-links",
+        type=int,
+        default=DEFAULT_MAX_LINKS,
+        help=f"most links --fetch requests (default {DEFAULT_MAX_LINKS})",
+    )
 
     snip = sub.add_parser("serve-snippet", help='print the <link rel="alternate"> tag for llms.txt')
     snip.add_argument("--href", default="/llms.txt", help="href for the tag (default /llms.txt)")
@@ -172,6 +189,11 @@ def _check(args: argparse.Namespace) -> int:
             print(f"error: {args.target} is not a file or a URL", file=sys.stderr)
             return EXIT_USAGE
         result = check_file(path)
+    if args.fetch:
+        if args.max_links < 0:
+            print("error: --max-links must be 0 or more", file=sys.stderr)
+            return EXIT_USAGE
+        check_links_live(result, probe, timeout=args.timeout, max_links=args.max_links)
     if args.format == "json":
         payload = {
             "source": args.target,

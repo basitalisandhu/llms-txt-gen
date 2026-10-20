@@ -6,9 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `check --fetch`: request every distinct `http(s)` link (`HEAD`, then `GET` when `HEAD` gets 400 or above, body never read, at most 5 redirects and only to HTTP URLs) and report `E007` for a status of 400 or above or a network error. `--max-links` (default 100) caps the requests and `I002` counts the rest. (#10)
+
 ### Fixed
 
 - `generate` from a gzipped sitemap no longer stops with a Python traceback when the gzip data is truncated or corrupt; it reports `bad gzip data` like any other fetch error. The 5 MB response cap now also applies after decompression, so a small compressed sitemap cannot expand without limit in memory.
+
+### Changed
+
+- README: a "who it is for" line and the exact command that produces the example output.
 
 ## [0.2.0] - 2026-10-09
 

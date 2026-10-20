@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -32,6 +33,7 @@ class CheckResult:
     title: str | None
     sections: list[str]
     link_count: int
+    links: list[tuple[int, str]] = field(default_factory=list)
 
     @property
     def errors(self) -> list[Finding]:
@@ -67,6 +69,7 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
     section_links: dict[str, int] = {}
     seen_urls: dict[str, int] = {}
     link_count = 0
+    links: list[tuple[int, str]] = []
     summary_seen = False
     in_code = False
     first_content_line: int | None = None
@@ -145,6 +148,7 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
                     )
                 continue
             url = m.group("url")
+            links.append((number, url))
             link_count += 1
             section_links[current_section] += 1
             if not m.group("name").strip():
@@ -179,7 +183,49 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
             Finding(WARNING, "W005", "the 'Optional' section should be the last section")
         )
     findings.append(Finding(INFO, "I001", f"{len(sections)} section(s), {link_count} link(s)"))
-    return CheckResult(findings=findings, title=title, sections=sections, link_count=link_count)
+    return CheckResult(
+        findings=findings, title=title, sections=sections, link_count=link_count, links=links
+    )
+
+
+DEFAULT_MAX_LINKS = 100
+
+
+def check_links_live(
+    result: CheckResult,
+    prober: Callable[[str, float], int],
+    timeout: float,
+    max_links: int = DEFAULT_MAX_LINKS,
+) -> int:
+    """Request every distinct http(s) link once and add E007 for failures.
+
+    `prober` returns an HTTP status or raises an exception from the sitemap module's
+    FetchError family. At most `max_links` URLs are requested; the rest are reported
+    as I002. Returns the number of URLs requested.
+    """
+    from .sitemap import FetchError
+
+    remote: dict[str, int] = {}
+    for line, url in result.links:
+        if urlsplit(url).scheme.lower() in {"http", "https"} and url not in remote:
+            remote[url] = line
+    targets = list(remote.items())[: max(max_links, 0)]
+    for url, line in targets:
+        try:
+            status = prober(url, timeout)
+        except FetchError as exc:
+            result.findings.append(Finding(ERROR, "E007", f"link unreachable: {exc}", line))
+            continue
+        if status >= 400:
+            result.findings.append(
+                Finding(ERROR, "E007", f"link returned HTTP {status}: {url}", line)
+            )
+    skipped = len(remote) - len(targets)
+    if skipped:
+        result.findings.append(
+            Finding(INFO, "I002", f"{skipped} link(s) not fetched; raise --max-links to check them")
+        )
+    return len(targets)
 
 
 def check_file(path: Path) -> CheckResult:

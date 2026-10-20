@@ -153,6 +153,34 @@ def test_check_missing_file_and_url(monkeypatch, tmp_path: Path):
     assert run("check", "https://x.dev/llms.txt")[0] == 2
 
 
+def test_check_fetch_flag_requests_links_and_fails_on_dead_ones(monkeypatch, tmp_path: Path):
+    f = write(
+        tmp_path,
+        "llms.txt",
+        "# T\n\n> Summary text here.\n\n## S\n\n- [a](https://a.dev/)\n- [b](https://b.dev/)\n",
+    )
+    seen: list[str] = []
+
+    def fake_probe(url, timeout):
+        seen.append(url)
+        return 200 if url == "https://a.dev/" else 410
+
+    monkeypatch.setattr(cli, "probe", fake_probe)
+    assert run("check", str(f))[0] == 0 and seen == [], "no requests without --fetch"
+    rc, data = run_json("check", str(f), "--fetch", "--format", "json")
+    assert rc == 1 and seen == ["https://a.dev/", "https://b.dev/"]
+    assert {
+        "level": "error",
+        "code": "E007",
+        "message": "link returned HTTP 410: https://b.dev/",
+        "line": 8,
+    } in data["findings"]
+    rc, out, _ = run("check", str(f), "--fetch", "--max-links", "1")
+    assert rc == 0 and "I002" in out
+    rc, _, err = run("check", str(f), "--fetch", "--max-links", "-1")
+    assert rc == 2 and "--max-links" in err
+
+
 def test_serve_snippet():
     rc, out, _ = run("serve-snippet")
     assert (
