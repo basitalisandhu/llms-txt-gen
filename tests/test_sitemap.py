@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gzip
+
 import pytest
 
 from llms_txt_gen.sitemap import (
@@ -7,6 +9,7 @@ from llms_txt_gen.sitemap import (
     FetchError,
     crawl_sitemap,
     fetch,
+    gunzip_capped,
     is_url,
     page_from_response,
     pages_from_sitemap,
@@ -132,3 +135,61 @@ def test_fetch_times_out(monkeypatch):
 def test_is_url():
     assert is_url("https://x.dev/sitemap.xml") and is_url("HTTP://x")
     assert not is_url("./docs") and not is_url("docs/sitemap.xml")
+
+
+class _Response:
+    def __init__(self, body: bytes, content_type: str = "application/xml") -> None:
+        self._body = body
+        self.headers = {"Content-Type": content_type}
+
+    def read(self, n: int) -> bytes:
+        return self._body[:n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _serve(monkeypatch, body: bytes) -> None:
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Response(body))
+
+
+def test_fetch_decompresses_gzip_by_extension_or_magic(monkeypatch):
+    _serve(monkeypatch, gzip.compress(URLSET))
+    assert fetch("https://docs.example.com/sitemap.xml.gz") == (URLSET, "application/xml")
+    assert fetch("https://docs.example.com/sitemap.xml")[0] == URLSET
+
+
+@pytest.mark.parametrize("cut", [slice(0, 20), slice(0, -4)])
+def test_fetch_reports_truncated_gzip_as_fetch_error(monkeypatch, cut):
+    _serve(monkeypatch, gzip.compress(URLSET)[cut])
+    with pytest.raises(FetchError, match="bad gzip data"):
+        fetch("https://docs.example.com/sitemap.xml.gz")
+
+
+def test_fetch_reports_corrupt_gzip_as_fetch_error(monkeypatch):
+    good = gzip.compress(URLSET)
+    _serve(monkeypatch, good[:10] + b"\xff" * 30 + good[-8:])
+    with pytest.raises(FetchError, match="bad gzip data"):
+        fetch("https://docs.example.com/sitemap.xml.gz")
+
+
+def test_gunzip_caps_the_decompressed_size():
+    bomb = gzip.compress(b"\0" * 10_000)
+    assert len(bomb) < 1_000
+    with pytest.raises(FetchError, match="decompressed response larger than 4096 bytes"):
+        gunzip_capped(bomb, "https://x.dev/s.xml.gz", limit=4096)
+    assert gunzip_capped(bomb, "https://x.dev/s.xml.gz", limit=10_000) == b"\0" * 10_000
+
+
+def test_fetch_rejects_an_oversized_body(monkeypatch):
+    from llms_txt_gen import sitemap
+
+    monkeypatch.setattr(sitemap, "MAX_BYTES", 10)
+    _serve(monkeypatch, b"x" * 11)
+    with pytest.raises(FetchError, match="larger than 10 bytes"):
+        fetch("https://docs.example.com/sitemap.xml")
