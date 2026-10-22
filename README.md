@@ -130,15 +130,15 @@ llms.txt: problems found
 
 `generate` with a URL fetches the sitemap and each page it lists; `check` with a URL fetches that file, and `check --fetch` requests the links in it. `diff` fetches only its input URLs, not their linked pages. Nothing else touches the network. Only `http` and `https` URLs are accepted, every request has a timeout, bodies are capped at 5 MB (also after gzip decompression), the page count is capped by `--max-pages`, and the User-Agent identifies the tool. Pages that fail to fetch are skipped with a message on stderr and do not fail the run.
 
-## Checks
-
-### Detect lost links after a deployment
+## Detect lost links after a deployment
 
 ```sh
 llms-txt-gen diff before-llms.txt https://docs.example.com/llms.txt --format json
 ```
 
 `diff BEFORE AFTER` accepts a local file or HTTP(S) URL on either side and compares distinct link URLs exactly as written. Text output prefixes sorted removed URLs with `-` and additions with `+`; JSON contains sorted `added` and `removed` arrays. Titles, descriptions, section ordering and duplicate links do not cause changes. Exit codes are 0 for equal sets, 1 for any addition or removal, and 2 for unreadable or invalid input. `--timeout` controls URL requests; linked pages themselves are never fetched. Relative URLs are compared literally, not resolved against the input location.
+
+## Checks
 
 | Code | Level | Meaning |
 |---|---|---|
