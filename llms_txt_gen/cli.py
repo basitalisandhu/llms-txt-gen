@@ -1,4 +1,4 @@
-"""Command line interface: generate, check and serve-snippet."""
+"""Command line interface: generate, check, diff and serve-snippet."""
 
 from __future__ import annotations
 
@@ -108,6 +108,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"most links --fetch requests (default {DEFAULT_MAX_LINKS})",
     )
 
+    diff = sub.add_parser("diff", help="compare link sets in two llms.txt files or URLs")
+    diff.add_argument("before", help="previous llms.txt file or http(s) URL")
+    diff.add_argument("after", help="current llms.txt file or http(s) URL")
+    diff.add_argument("--format", choices=["text", "json"], default="text")
+    diff.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+
     snip = sub.add_parser("serve-snippet", help='print the <link rel="alternate"> tag for llms.txt')
     snip.add_argument("--href", default="/llms.txt", help="href for the tag (default /llms.txt)")
     snip.add_argument("--full", action="store_true", help="also print the llms-full.txt tag")
@@ -209,6 +215,34 @@ def _check(args: argparse.Namespace) -> int:
     return EXIT_OK if result.ok(args.strict) else EXIT_FINDINGS
 
 
+def _diff(args: argparse.Namespace) -> int:
+    link_sets: list[set[str]] = []
+    for target in (args.before, args.after):
+        try:
+            if is_url(target):
+                data, _ = fetch(target, timeout=args.timeout)
+                text = data.decode("utf-8")
+            else:
+                text = Path(target).read_text(encoding="utf-8")
+            result = check_text(text)
+            if result.errors or not result.sections:
+                raise ValueError("not a valid llms.txt file")
+            link_sets.append({url for _, url in result.links})
+        except (OSError, UnicodeError, FetchError, ValueError) as exc:
+            print(f"error: {target}: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+    before, after = link_sets
+    added, removed = sorted(after - before), sorted(before - after)
+    if args.format == "json":
+        sys.stdout.write(json.dumps({"added": added, "removed": removed}, indent=2) + "\n")
+    elif not added and not removed:
+        sys.stdout.write("No link changes.\n")
+    else:
+        sys.stdout.write("".join(f"- {url}\n" for url in removed))
+        sys.stdout.write("".join(f"+ {url}\n" for url in added))
+    return EXIT_FINDINGS if added or removed else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -216,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         return _generate(args)
     if args.command == "check":
         return _check(args)
+    if args.command == "diff":
+        return _diff(args)
     if args.command == "serve-snippet":
         sys.stdout.write(snippet(args.href, full=args.full, header=args.header))
         return EXIT_OK

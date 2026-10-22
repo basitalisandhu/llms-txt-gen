@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `diff BEFORE AFTER` compares distinct link URLs in local or remote llms.txt files. Sorted text or JSON additions/removals and exit codes (0 unchanged, 1 changed, 2 invalid/unreadable input) let deployment checks detect lost documentation links without fetching the linked pages. (#11)
+
 ## [0.3.0] - 2026-10-20
 
 ### Added
