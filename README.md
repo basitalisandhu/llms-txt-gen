@@ -89,6 +89,7 @@ The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-
 |---|---|
 | `llms-txt-gen generate SOURCE --out llms.txt` | Build `llms.txt` from a directory of `.md`, `.mdx`, `.markdown`, `.html` or `.htm` files, or from a sitemap URL (`sitemap.xml` or a sitemap index). `--full` also writes `llms-full.txt`; `--stdout` prints instead of writing. |
 | `llms-txt-gen check FILE-OR-URL` | Validate against the convention: H1 title first, optional blockquote summary, H2 sections of `- [name](url): notes` lines, no deeper headings, `Optional` last, no duplicate links, and for local files no broken relative links. `--format json`, `--strict` (warnings fail), `--fetch` (request every `http(s)` link, see below). Exit 1 on errors, 2 on usage errors. |
+| `llms-txt-gen diff BEFORE AFTER` | Compare the link URLs of two `llms.txt` files or URLs; removed links are grouped by their section in BEFORE, added ones by their section in AFTER. `--format json`, `--quiet` (print nothing, exit code only), `--timeout`. Exit 1 on differences, 2 on unreadable or invalid input. |
 | `llms-txt-gen serve-snippet` | Print `<link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt">` for the site `<head>`. `--full` adds the `llms-full.txt` tag, `--header` prints HTTP `Link:` headers instead, `--href` sets the location. |
 
 ### generate options
@@ -128,7 +129,15 @@ llms.txt: problems found
 
 ### Network use
 
-`generate` with a URL fetches the sitemap and each page it lists; `check` with a URL fetches that file, and `check --fetch` requests the links in it. Nothing else touches the network. Only `http` and `https` URLs are accepted, every request has a timeout, bodies are capped at 5 MB (also after gzip decompression), the page count is capped by `--max-pages`, and the User-Agent identifies the tool. Pages that fail to fetch are skipped with a message on stderr and do not fail the run.
+`generate` with a URL fetches the sitemap and each page it lists; `check` with a URL fetches that file, and `check --fetch` requests the links in it. `diff` fetches only its input URLs, not their linked pages. Nothing else touches the network. Only `http` and `https` URLs are accepted, every request has a timeout, bodies are capped at 5 MB (also after gzip decompression), the page count is capped by `--max-pages`, and the User-Agent identifies the tool. Pages that fail to fetch are skipped with a message on stderr and do not fail the run.
+
+## Detect lost links after a deployment
+
+```sh
+llms-txt-gen diff before-llms.txt https://docs.example.com/llms.txt --format json
+```
+
+`diff BEFORE AFTER` accepts a local file or HTTP(S) URL on either side and compares distinct link URLs exactly as written. Text output lists sorted removed URLs under `Removed:` grouped by their section in BEFORE and sorted additions under `Added:` grouped by their section in AFTER; JSON nests sorted URL lists by section in `added` and `removed` objects. A URL that only moved to a different section is not a change, and titles, descriptions, section ordering and duplicate links do not cause changes either. Exit codes are 0 for equal sets, 1 for any addition or removal, and 2 for unreadable or invalid input. `--quiet` prints nothing and relies on the exit code alone, for shell `if` checks. `--timeout` controls URL requests; linked pages themselves are never fetched. Relative URLs are compared literally, not resolved against the input location.
 
 ## Checks
 
@@ -205,7 +214,7 @@ repos:
 An H1 with the project name, a one-paragraph blockquote summary, optionally a few paragraphs of context without headings, then H2 sections each holding a list of `- [page name](url): one line about the page`. A section named `Optional` holds pages a model may skip. That is the whole convention; `llms-txt-gen check` enforces it and the README of [llmstxt.org](https://llmstxt.org) documents it.
 
 **Does it need network access?**
-Only when you pass a sitemap URL to `generate` or a URL to `check`. Directory mode and file mode never make a request, which is why they are safe in CI and in pre-commit hooks.
+Only when you pass a sitemap URL to `generate`, a URL to `check` or `diff`, or `--fetch` to `check`. Directory mode and local-file modes without `--fetch` never make a request, which is why they are safe in CI and in pre-commit hooks.
 
 **Can I keep the file by hand and only check it?**
 Yes. `check` is independent of `generate`. Many projects write the summary by hand and generate only the link lists; use `--title`, `--summary` and `--body` to keep the prose fixed while the lists are regenerated.
