@@ -34,6 +34,7 @@ class CheckResult:
     sections: list[str]
     link_count: int
     links: list[tuple[int, str]] = field(default_factory=list)
+    section_lines: dict[str, int] = field(default_factory=dict)
 
     @property
     def errors(self) -> list[Finding]:
@@ -67,6 +68,7 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
     sections: list[str] = []
     current_section: str | None = None
     section_links: dict[str, int] = {}
+    section_lines: dict[str, int] = {}
     seen_urls: dict[str, int] = {}
     link_count = 0
     links: list[tuple[int, str]] = []
@@ -108,6 +110,7 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
                 current_section = name
                 sections.append(name)
                 section_links.setdefault(name, 0)
+                section_lines.setdefault(name, number)
             else:
                 findings.append(
                     Finding(
@@ -184,7 +187,12 @@ def check_text(text: str, base_dir: Path | None = None) -> CheckResult:
         )
     findings.append(Finding(INFO, "I001", f"{len(sections)} section(s), {link_count} link(s)"))
     return CheckResult(
-        findings=findings, title=title, sections=sections, link_count=link_count, links=links
+        findings=findings,
+        title=title,
+        sections=sections,
+        link_count=link_count,
+        links=links,
+        section_lines=section_lines,
     )
 
 

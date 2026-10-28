@@ -9,7 +9,14 @@ from pathlib import Path
 
 from . import __version__
 from .build import build_document, render_llms_full, render_llms_txt
-from .check import DEFAULT_MAX_LINKS, check_file, check_links_live, check_text, format_text
+from .check import (
+    DEFAULT_MAX_LINKS,
+    CheckResult,
+    check_file,
+    check_links_live,
+    check_text,
+    format_text,
+)
 from .discover import scan_directory
 from .extract import humanise
 from .sitemap import (
@@ -113,6 +120,11 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("after", help="current llms.txt file or http(s) URL")
     diff.add_argument("--format", choices=["text", "json"], default="text")
     diff.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    diff.add_argument(
+        "--quiet",
+        action="store_true",
+        help="print nothing; the exit code alone reports the outcome",
+    )
 
     snip = sub.add_parser("serve-snippet", help='print the <link rel="alternate"> tag for llms.txt')
     snip.add_argument("--href", default="/llms.txt", help="href for the tag (default /llms.txt)")
@@ -215,8 +227,31 @@ def _check(args: argparse.Namespace) -> int:
     return EXIT_OK if result.ok(args.strict) else EXIT_FINDINGS
 
 
+def _link_sections(result: CheckResult) -> dict[str, str]:
+    """Map each link URL to the section it first appears under."""
+    starts = sorted((line, name) for name, line in result.section_lines.items())
+    url_section: dict[str, str] = {}
+    for line, url in result.links:
+        if url in url_section:
+            continue
+        for start, name in reversed(starts):
+            if start < line:
+                url_section[url] = name
+                break
+    return url_section
+
+
+def _group_by_section(
+    urls: list[str], url_section: dict[str, str], section_order: list[str]
+) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {name: [] for name in dict.fromkeys(section_order)}
+    for url in urls:
+        groups[url_section[url]].append(url)
+    return {name: group for name, group in groups.items() if group}
+
+
 def _diff(args: argparse.Namespace) -> int:
-    link_sets: list[set[str]] = []
+    results: list[CheckResult] = []
     for target in (args.before, args.after):
         try:
             if is_url(target):
@@ -227,19 +262,33 @@ def _diff(args: argparse.Namespace) -> int:
             result = check_text(text)
             if result.errors or not result.sections:
                 raise ValueError("not a valid llms.txt file")
-            link_sets.append({url for _, url in result.links})
+            results.append(result)
         except (OSError, UnicodeError, FetchError, ValueError) as exc:
             print(f"error: {target}: {exc}", file=sys.stderr)
             return EXIT_USAGE
-    before, after = link_sets
-    added, removed = sorted(after - before), sorted(before - after)
+    before_result, after_result = results
+    before, after = _link_sections(before_result), _link_sections(after_result)
+    added, removed = sorted(set(after) - set(before)), sorted(set(before) - set(after))
+    added_by_section = _group_by_section(added, after, after_result.sections)
+    removed_by_section = _group_by_section(removed, before, before_result.sections)
+    if args.quiet:
+        return EXIT_FINDINGS if added or removed else EXIT_OK
     if args.format == "json":
-        sys.stdout.write(json.dumps({"added": added, "removed": removed}, indent=2) + "\n")
+        payload = {"added": added_by_section, "removed": removed_by_section}
+        sys.stdout.write(json.dumps(payload, indent=2) + "\n")
     elif not added and not removed:
         sys.stdout.write("No link changes.\n")
     else:
-        sys.stdout.write("".join(f"- {url}\n" for url in removed))
-        sys.stdout.write("".join(f"+ {url}\n" for url in added))
+        for label, mark, grouped in (
+            ("Removed", "-", removed_by_section),
+            ("Added", "+", added_by_section),
+        ):
+            if not grouped:
+                continue
+            sys.stdout.write(f"{label}:\n")
+            for section, urls in grouped.items():
+                sys.stdout.write(f"  {section}:\n")
+                sys.stdout.write("".join(f"    {mark} {url}\n" for url in urls))
     return EXIT_FINDINGS if added or removed else EXIT_OK
 
 

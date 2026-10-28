@@ -89,6 +89,7 @@ The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-
 |---|---|
 | `llms-txt-gen generate SOURCE --out llms.txt` | Build `llms.txt` from a directory of `.md`, `.mdx`, `.markdown`, `.html` or `.htm` files, or from a sitemap URL (`sitemap.xml` or a sitemap index). `--full` also writes `llms-full.txt`; `--stdout` prints instead of writing. |
 | `llms-txt-gen check FILE-OR-URL` | Validate against the convention: H1 title first, optional blockquote summary, H2 sections of `- [name](url): notes` lines, no deeper headings, `Optional` last, no duplicate links, and for local files no broken relative links. `--format json`, `--strict` (warnings fail), `--fetch` (request every `http(s)` link, see below). Exit 1 on errors, 2 on usage errors. |
+| `llms-txt-gen diff BEFORE AFTER` | Compare the link URLs of two `llms.txt` files or URLs; removed links are grouped by their section in BEFORE, added ones by their section in AFTER. `--format json`, `--quiet` (print nothing, exit code only), `--timeout`. Exit 1 on differences, 2 on unreadable or invalid input. |
 | `llms-txt-gen serve-snippet` | Print `<link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt">` for the site `<head>`. `--full` adds the `llms-full.txt` tag, `--header` prints HTTP `Link:` headers instead, `--href` sets the location. |
 
 ### generate options
@@ -136,7 +137,7 @@ llms.txt: problems found
 llms-txt-gen diff before-llms.txt https://docs.example.com/llms.txt --format json
 ```
 
-`diff BEFORE AFTER` accepts a local file or HTTP(S) URL on either side and compares distinct link URLs exactly as written. Text output prefixes sorted removed URLs with `-` and additions with `+`; JSON contains sorted `added` and `removed` arrays. Titles, descriptions, section ordering and duplicate links do not cause changes. Exit codes are 0 for equal sets, 1 for any addition or removal, and 2 for unreadable or invalid input. `--timeout` controls URL requests; linked pages themselves are never fetched. Relative URLs are compared literally, not resolved against the input location.
+`diff BEFORE AFTER` accepts a local file or HTTP(S) URL on either side and compares distinct link URLs exactly as written. Text output lists sorted removed URLs under `Removed:` grouped by their section in BEFORE and sorted additions under `Added:` grouped by their section in AFTER; JSON nests sorted URL lists by section in `added` and `removed` objects. A URL that only moved to a different section is not a change, and titles, descriptions, section ordering and duplicate links do not cause changes either. Exit codes are 0 for equal sets, 1 for any addition or removal, and 2 for unreadable or invalid input. `--quiet` prints nothing and relies on the exit code alone, for shell `if` checks. `--timeout` controls URL requests; linked pages themselves are never fetched. Relative URLs are compared literally, not resolved against the input location.
 
 ## Checks
 
