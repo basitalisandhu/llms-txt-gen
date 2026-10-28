@@ -30,6 +30,10 @@ inputs:
     description: Space-separated globs of URLs or section names to place under "Optional".
     required: false
     default: ""
+  nav:
+    description: Path to an MkDocs mkdocs.yml whose nav list gives section names and page order (directory sources only).
+    required: false
+    default: ""
   max-pages:
     description: Page cap when reading a sitemap.
     required: false
@@ -95,12 +99,14 @@ runs:
         STRIP_EXT: ${{ inputs.strip-ext }}
         OPTIONAL: ${{ inputs.optional }}
         MAX_PAGES: ${{ inputs.max-pages }}
+        NAV: ${{ inputs.nav }}
         TIMEOUT: ${{ inputs.timeout }}
       run: |
         args=(generate "$SOURCE" --out "$OUT" --max-pages "$MAX_PAGES" --timeout "$TIMEOUT")
         [ "$FULL" = "true" ] && args+=(--full)
         [ -n "$BASE_URL" ] && args+=(--base-url "$BASE_URL")
         [ "$STRIP_EXT" = "true" ] && args+=(--strip-ext)
+        [ -n "$NAV" ] && args+=(--nav "$NAV")
         for pat in $OPTIONAL; do args+=(--optional "$pat"); done
         llms-txt-gen "${args[@]}"
         summary=$(llms-txt-gen check "$OUT" --format json || true)
