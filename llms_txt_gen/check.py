@@ -228,9 +228,33 @@ def check_links_live(
     return len(targets)
 
 
+class InputError(ValueError):
+    """The file or response cannot be read as UTF-8 text; the message names it."""
+
+
+def decode_text(data: bytes, source: str) -> str:
+    """Decode UTF-8 (a leading byte order mark is dropped) or raise InputError naming `source`.
+
+    llms.txt is Markdown and the convention expects UTF-8. A UTF-16 file, which some Windows
+    editors and PowerShell's `>` write, used to decode to noise and fail as 'missing H1 title'.
+    """
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        raise InputError(f"{source} is UTF-16 text; save it as UTF-8 and run again")
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise InputError(
+            f"{source} is not UTF-8 text (byte 0x{data[exc.start]:02x} at offset {exc.start}); "
+            "save it as UTF-8 and run again"
+        ) from None
+
+
 def check_file(path: Path) -> CheckResult:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    return check_text(text, base_dir=path.resolve().parent)
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise InputError(f"cannot read {path}: {exc.strerror or exc}") from None
+    return check_text(decode_text(data, str(path)), base_dir=path.resolve().parent)
 
 
 def format_text(result: CheckResult, source: str) -> str:

@@ -1,4 +1,4 @@
-.PHONY: install lint format test check build example clean
+.PHONY: install lint format test check build example e2e clean
 
 PY ?= uv run
 
@@ -21,6 +21,9 @@ check: lint test
 build:
 	rm -rf dist
 	uv build
+
+e2e:
+	PYTHON="$$(uv run python -c 'import sys; print(sys.executable)')" scripts/e2e_quickstart.sh
 
 example:
 	$(PY) llms-txt-gen generate examples/docs --out examples/llms.txt --full --base-url https://acme.example.com/docs --strip-ext --optional 'changelog*'

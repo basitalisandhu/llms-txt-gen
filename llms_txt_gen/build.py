@@ -22,10 +22,14 @@ def build_document(
     summary: str = "",
     body: list[str] | None = None,
     optional: list[str] | None = None,
+    section_order: list[str] | None = None,
 ) -> Document:
     """Group pages by section. Pages whose URL or section matches an `optional` glob go to the
-    conventional "Optional" section, which is always rendered last."""
+    conventional "Optional" section, which is always rendered last. Sections named in
+    `section_order` (from an MkDocs nav) come first in that order; the rest follow
+    alphabetically."""
     optional = optional or []
+    rank = {name: i for i, name in enumerate(section_order or [])}
     groups: dict[str, list[Page]] = {}
     for page in pages:
         name = page.section or "Docs"
@@ -33,12 +37,14 @@ def build_document(
             name = OPTIONAL
         groups.setdefault(name, []).append(page)
 
-    def section_key(name: str) -> tuple[int, str]:
-        if name == "Docs":
-            return (0, "")
+    def section_key(name: str) -> tuple[int, int, str]:
         if name == OPTIONAL:
-            return (2, "")
-        return (1, name.lower())
+            return (3, 0, "")
+        if name in rank:
+            return (1, rank[name], "")
+        if name == "Docs":
+            return (0, 0, "")
+        return (2, 0, name.lower())
 
     sections = [
         Section(name, sorted(groups[name], key=lambda p: (p.order, p.title.lower())))

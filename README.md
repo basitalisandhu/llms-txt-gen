@@ -53,17 +53,17 @@ Without `--base-url` the links stay relative (`guides/quickstart.md`), and witho
 Container image (linux/amd64 and linux/arm64), published to GitHub Packages on every release. Mount the docs or repository at `/work`; relative paths, including `--out`, resolve from there:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 generate docs --out llms.txt --full
-docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 check llms.txt --strict
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/llms-txt-gen:0.4.0 generate docs --out llms.txt --full
+docker run --rm -v "$PWD:/work:ro" ghcr.io/basitalisandhu/llms-txt-gen:0.4.0 check llms.txt --strict
 ```
 
 The image runs as uid 1000, so the mounted directory must be writable by that user for `generate`. Each image is signed with cosign (keyless) and has a build provenance attestation and an SPDX SBOM (attached to the GitHub Release). To verify:
 
 ```bash
-cosign verify ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 \
+cosign verify ghcr.io/basitalisandhu/llms-txt-gen:0.4.0 \
   --certificate-identity-regexp '^https://github.com/basitalisandhu/llms-txt-gen/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/basitalisandhu/llms-txt-gen:0.3.0 --owner basitalisandhu
+gh attestation verify oci://ghcr.io/basitalisandhu/llms-txt-gen:0.4.0 --owner basitalisandhu
 ```
 
 Python package: requires Python 3.11 or newer and nothing else. PyPI publication is pending, so install from the repository:
@@ -100,6 +100,7 @@ The other short forms work then too: `pipx install llms-txt-gen`, `uvx llms-txt-
 | `--strip-ext` | Drop `.md` and `.html` from generated links and turn `index` pages into their folder URL. |
 | `--include GLOB`, `--exclude GLOB` | Restrict or skip files (repeatable). `node_modules`, `.git`, virtual environments and build directories are always skipped. |
 | `--optional GLOB` | URLs or section names matching the glob go to the conventional `## Optional` section, which models may skip when context is short. |
+| `--nav MKDOCS_YML` | Take section names, page order and link names from the `nav` list of an MkDocs `mkdocs.yml` (directory sources only; SOURCE is the MkDocs `docs_dir`). See "MkDocs navigation" below. |
 | `--max-pages N` | Page cap when reading a sitemap (default 200). Sitemap indexes are followed, at most 50 sitemaps are read. |
 | `--timeout SECONDS` | Per-request timeout for sitemap and page fetches (default 10). Responses over 5 MB are rejected. |
 
@@ -114,6 +115,21 @@ overrides the folder-derived section; an empty value keeps the default section.
 - **Section**: the first path segment, humanised (`getting-started/` becomes `## Getting started`). Files at the root go under `## Docs`, which is rendered first. A folder's `index.md` is listed first in its section. The root `README.md` or `index.md` supplies the document title and summary and is not listed.
 - **Order**: sections alphabetical (`Docs` first, `Optional` last), pages in file order. Two runs over the same input give byte-identical output.
 - **`llms-full.txt`**: the title and summary, then every page as `# Title`, `Source: url` and its content (Markdown verbatim without front matter, HTML reduced to text with navigation, scripts and styles removed).
+
+### MkDocs navigation: `generate --nav`
+
+MkDocs projects already say how their docs are organised in `mkdocs.yml`. With `--nav`, those choices are used instead of folder names and file order:
+
+```bash
+llms-txt-gen generate docs --nav mkdocs.yml --out docs/llms.txt --base-url https://docs.example.com --strip-ext
+```
+
+- A top-level group (`- User Guide:` followed by a nested list) becomes `## User Guide`; deeper groups stay in their top-level section. Pages listed at the top level go to `## Docs`.
+- Sections and pages follow the nav order. A title written in nav (`- License: about/license.md`) becomes the link name.
+- Pages that are not in nav keep today's rules and come after the nav pages. A page in a folder that nav maps to a section (`user-guide/extra.md` when nav lists other `user-guide/` pages under "User Guide") joins that section.
+- Nav paths are relative to the docs folder, so SOURCE must be that folder (usually `docs/`). External links in nav are skipped.
+
+Only the `nav:` block is read, with a small parser in the standard library. It understands block lists nested by indentation, `- path.md`, `- Title: path.md`, `- Title:` groups, quoted values and `#` comments. Flow style (`nav: [a.md, b.md]`), anchors and multi-line values are refused with the file and line number rather than guessed at.
 
 ### Link liveness: `check --fetch`
 
@@ -176,7 +192,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: basitalisandhu/llms-txt-gen@v0.3.0      # pin a release tag
+      - uses: basitalisandhu/llms-txt-gen@v0.4.0      # pin a release tag
         with:
           source: docs
           out: llms.txt
@@ -185,7 +201,7 @@ jobs:
       - run: git diff --exit-code llms.txt llms-full.txt || echo "llms.txt changed; commit it"
 ```
 
-Inputs: `source` (directory or sitemap URL), `out`, `full`, `base-url`, `strip-ext`, `optional` (space-separated globs), `max-pages`, `timeout`, `check` (run `check --strict` on the result, default `true`), `python-version`, `version` (PyPI version; empty installs the action's own checkout). Outputs: `out`, `links`, `sections`. See [action.yml](action.yml).
+Inputs: `source` (directory or sitemap URL), `out`, `full`, `base-url`, `strip-ext`, `optional` (space-separated globs), `nav` (path to `mkdocs.yml`), `max-pages`, `timeout`, `check` (run `check --strict` on the result, default `true`), `python-version`, `version` (PyPI version; empty installs the action's own checkout). Outputs: `out`, `links`, `sections`. See [action.yml](action.yml).
 
 ### pre-commit
 
@@ -194,10 +210,30 @@ Validate `llms.txt` before every commit:
 ```yaml
 repos:
   - repo: https://github.com/basitalisandhu/llms-txt-gen
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: llms-txt-check
 ```
+
+## Troubleshooting
+
+Real messages and what to do about them. Every error goes to stderr and exits 2; findings in a checked file exit 1.
+
+| Message | Cause and fix |
+|---|---|
+| `ERROR: Package 'llms-txt-gen' requires a different Python: 3.10.12 not in '>=3.11'` | The tool needs Python 3.11 or newer. Use `pipx install --python python3.12 ...`, `uvx`, or the container image. |
+| `error: docs is not a directory or a URL` | SOURCE must be an existing folder, or a URL starting with `http://` or `https://`. Run the command from the repository root or pass an absolute path. |
+| `error: no Markdown or HTML files found under ...` | Only `.md`, `.mdx`, `.markdown`, `.html` and `.htm` files are read. Hidden folders, `node_modules`, `build`, `dist` and virtual environments are always skipped; check your `--include` and `--exclude` globs and any `llms: false` front matter. |
+| `error: llms.txt is UTF-16 text; save it as UTF-8 and run again` | Windows PowerShell 5 writes UTF-16 with `>`. Use `Set-Content -Encoding utf8`, or regenerate the file with `generate --out`. |
+| `error: llms.txt is not UTF-8 text (byte 0xe9 at offset 5); save it as UTF-8 and run again` | The file was saved in a legacy encoding such as Windows-1252. Re-save it as UTF-8 in your editor. |
+| `error: cannot write llms.txt: Permission denied` (container) | The image runs as uid 1000. Mount a folder that user can write to, or run with `--user "$(id -u):$(id -g)"`. |
+| `error: cannot write out: Is a directory` | `--out` names a file, not a folder: use `--out out/llms.txt`. |
+| `error: sitemap is not well-formed XML: ...` | The URL did not return a sitemap; often it is an HTML 404 page or a login wall. Open the URL in a browser, and try `/sitemap_index.xml` or the location named in `robots.txt`. |
+| `error: the sitemap yielded no pages` | The sitemap parsed but listed no `<url><loc>`. Point at the child sitemap, or raise `--max-pages` if it is set very low. |
+| `skipped https://...: HTTP Error 403: Forbidden` | A page refused the request. The run continues without it; some hosts block unknown user agents. |
+| `E006 broken local link` on a generated file | The links are relative to the docs folder but the file was written elsewhere. Write `--out` inside the docs folder, or pass `--base-url` so the links are absolute. |
+| `note: nav lists guide/a.md, which is not under .` | With `--nav`, SOURCE must be the MkDocs `docs_dir` (usually `docs/`), because nav paths are relative to it. |
+| `error: mkdocs.yml:4: 'nav:' must be followed by a block list ...` | The nav parser reads block lists only. Rewrite `nav: [a.md, b.md]` as one `- a.md` item per line. |
 
 ## Frequently asked questions
 
@@ -215,7 +251,7 @@ Serve it at `/llms.txt`, and add the tag from `serve-snippet` to the site `<head
 
 ## Roadmap
 
-- `--from-nav` mode that reads MkDocs, Docusaurus and Sphinx navigation files for section names and order.
+- Read Docusaurus sidebars and the Sphinx toctree for section names and order, as `--nav` does for MkDocs.
 - A `diff` command that shows which links were added or removed since the committed file.
 
 ## Contributing

@@ -9,9 +9,18 @@ from pathlib import Path
 
 from . import __version__
 from .build import build_document, render_llms_full, render_llms_txt
-from .check import DEFAULT_MAX_LINKS, check_file, check_links_live, check_text, format_text
+from .check import (
+    DEFAULT_MAX_LINKS,
+    InputError,
+    check_file,
+    check_links_live,
+    check_text,
+    decode_text,
+    format_text,
+)
 from .discover import scan_directory
 from .extract import humanise
+from .nav import NavError, apply_nav, read_nav
 from .sitemap import (
     DEFAULT_MAX_PAGES,
     DEFAULT_TIMEOUT,
@@ -71,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="glob of URLs or section names to put under 'Optional' (repeatable)",
     )
     gen.add_argument(
+        "--nav",
+        metavar="MKDOCS_YML",
+        help="take section names and page order from the nav list of an MkDocs mkdocs.yml",
+    )
+    gen.add_argument(
         "--max-pages",
         type=int,
         default=DEFAULT_MAX_PAGES,
@@ -117,9 +131,26 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _write(path: Path, text: str) -> str | None:
+    """Write `text` to `path`, creating parent folders. Returns an error message or None."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        return f"error: cannot write {path}: {exc.strerror or exc}"
+    return None
+
+
 def _generate(args: argparse.Namespace) -> int:
     body = list(args.body)
+    if args.max_pages < 1:
+        print("error: --max-pages must be 1 or more", file=sys.stderr)
+        return EXIT_USAGE
+    section_order: list[str] | None = None
     if is_url(args.source):
+        if args.nav:
+            print("error: --nav needs a directory SOURCE (the MkDocs docs_dir)", file=sys.stderr)
+            return EXIT_USAGE
         try:
             pages = pages_from_sitemap(
                 args.source, max_pages=args.max_pages, timeout=args.timeout, fetcher=fetch
@@ -149,16 +180,41 @@ def _generate(args: argparse.Namespace) -> int:
         if not pages and index is None:
             print(f"error: no Markdown or HTML files found under {root}", file=sys.stderr)
             return EXIT_USAGE
+        if args.nav:
+            try:
+                entries = read_nav(Path(args.nav))
+            except NavError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return EXIT_USAGE
+            section_order, missing = apply_nav(pages, entries)
+            index_rel = index.rel if index else None
+            missing = [p for p in missing if p != index_rel]
+            for path in missing:
+                print(f"note: nav lists {path}, which is not under {root}", file=sys.stderr)
+            if missing and len(missing) == sum(e.path != index_rel for e in entries):
+                print(
+                    "note: no nav path matched; SOURCE should be the MkDocs docs_dir "
+                    "(usually docs/), which nav paths are relative to",
+                    file=sys.stderr,
+                )
         title = args.title or (index.title if index else humanise(root.resolve().name))
         summary = args.summary or (index.summary if index else "")
-    doc = build_document(pages, title=title, summary=summary, body=body, optional=args.optional)
+    doc = build_document(
+        pages,
+        title=title,
+        summary=summary,
+        body=body,
+        optional=args.optional,
+        section_order=section_order,
+    )
     text = render_llms_txt(doc)
     if args.stdout:
         sys.stdout.write(text)
     else:
         out = Path(args.out)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+        if error := _write(out, text):
+            print(error, file=sys.stderr)
+            return EXIT_USAGE
         print(
             f"wrote {out} ({len(doc.pages)} links in {len(doc.sections)} sections)", file=sys.stderr
         )
@@ -170,7 +226,9 @@ def _generate(args: argparse.Namespace) -> int:
         if args.stdout:
             sys.stdout.write(full_text)
         else:
-            full_path.write_text(full_text, encoding="utf-8")
+            if error := _write(full_path, full_text):
+                print(error, file=sys.stderr)
+                return EXIT_USAGE
             print(f"wrote {full_path} ({len(full_text)} characters)", file=sys.stderr)
     return EXIT_OK
 
@@ -182,13 +240,21 @@ def _check(args: argparse.Namespace) -> int:
         except FetchError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_USAGE
-        result = check_text(body.decode("utf-8", errors="replace"))
+        try:
+            result = check_text(decode_text(body, args.target))
+        except InputError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
     else:
         path = Path(args.target)
         if not path.is_file():
             print(f"error: {args.target} is not a file or a URL", file=sys.stderr)
             return EXIT_USAGE
-        result = check_file(path)
+        try:
+            result = check_file(path)
+        except InputError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
     if args.fetch:
         if args.max_links < 0:
             print("error: --max-links must be 0 or more", file=sys.stderr)

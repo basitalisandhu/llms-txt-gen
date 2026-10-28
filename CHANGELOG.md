@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- `generate --nav mkdocs.yml` takes section names, page order and link names from the MkDocs `nav` list, read with a small standard-library parser that refuses unsupported YAML with the file and line. Pages not in nav keep the folder rules and join the nav section of their folder. (#9)
+- README "Troubleshooting" table with the real error messages and their fixes.
+- `scripts/e2e_quickstart.sh` (and `make e2e`) runs the README quick start against a freshly installed wheel in a temporary directory, with the sitemap step served from 127.0.0.1; CI runs it on every push.
+
+### Fixed
+
+- A Markdown file with many blank lines made title extraction quadratic: 40,000 blank lines took 2.6 s and doubling them quadrupled the time. It is now linear (under 0.01 s for the same file).
+- A line holding only `#` no longer takes the next line as the page title.
+- `check` on a UTF-16 or other non-UTF-8 file now exits 2 with a message naming the file and the first bad byte, instead of reporting a misleading "missing H1 title". A UTF-8 byte order mark is accepted, in `check` and in front matter.
+- `check` on an unreadable file, and `generate` with an `--out` or `--full-out` that is a folder or cannot be written, exit 2 with `error: cannot read/write PATH: reason` instead of a Python traceback.
+- `generate --max-pages 0` (or a negative value) is refused as a usage error instead of reporting an empty sitemap.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

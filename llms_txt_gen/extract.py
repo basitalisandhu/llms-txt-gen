@@ -8,8 +8,11 @@ from html.parser import HTMLParser
 
 MAX_SUMMARY = 200
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.S)
-_H1_RE = re.compile(r"^#\s+(.+?)\s*#*\s*$", re.M)
-_SETEXT_H1_RE = re.compile(r"^(?!\s*$)(.+)\n=+\s*$", re.M)
+# [ \t] rather than \s: \s also matches newlines, which let "#" on one line take the next
+# line as its title and made the Setext pattern rescan every following blank line
+# (quadratic on files with many blank lines).
+_H1_RE = re.compile(r"^#[ \t]+(.+?)[ \t]*#*[ \t]*$", re.M)
+_SETEXT_H1_RE = re.compile(r"^(?![ \t]*$)(.+)\n=+[ \t]*$", re.M)
 _INLINE_MD_RE = re.compile(r"(\*\*|__|`|\*|_)")
 _LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -37,6 +40,7 @@ def strip_inline_markdown(text: str) -> str:
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     """Return simple key: value pairs from YAML-style front matter and the remaining body."""
+    text = text.removeprefix("\ufeff")
     m = _FRONTMATTER_RE.match(text)
     if not m:
         return {}, text

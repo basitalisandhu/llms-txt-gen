@@ -21,6 +21,8 @@ way to skip them is `--exclude`.
 
 ## 2. Read the MkDocs `nav` for section names and order
 
+**Status.** Done in 0.4.0 (#9).
+
 **Context.** MkDocs projects already declare their navigation in `mkdocs.yml`. Using it gives
 human-chosen section names and page order instead of folder names and file order.
 
